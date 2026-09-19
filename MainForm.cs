@@ -23,6 +23,8 @@ internal sealed class MainForm : Form
     private readonly GlobalKeyboardHook _keyboardHook = new();
     private readonly LowLatencyInputDispatcher _inputDispatcher;
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 100 };
+    private readonly System.Windows.Forms.Timer _coordinateTimer = new() { Interval = 33 };
+    private CoordinateMonitorOverlay? _coordinateMonitor;
 
     private ListView _bindingList = null!;
     private ListView _macroList = null!;
@@ -110,8 +112,8 @@ internal sealed class MainForm : Form
         ForeColor = TextPrimary;
         Font = new Font("Segoe UI", 10F);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(620, 800);
-        MinimumSize = new Size(620, 830);
+        ClientSize = new Size(620, 835);
+        MinimumSize = new Size(620, 865);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
         KeyPreview = true;
@@ -203,7 +205,7 @@ internal sealed class MainForm : Form
             ColumnCount = 1,
             Margin = Padding.Empty
         };
-        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 330));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 365));
         left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         left.Controls.Add(BuildBindingsCard(), 0, 0);
         left.Controls.Add(BuildMacroCard(), 0, 1);
@@ -264,6 +266,20 @@ internal sealed class MainForm : Form
         var deleteButton = CreateSecondaryButton("삭제", new Point(374, 252), new Size(159, 38));
         deleteButton.Click += (_, _) => DeleteSelectedBinding();
         card.Controls.Add(deleteButton);
+        var coordinateView = new CheckBox
+        {
+            Text = "게임 위 좌표 보기 · 선택한 바인딩 기준도 표시",
+            Location = new Point(22, 303), AutoSize = true,
+            ForeColor = TextSecondary, Checked = _settings.ShowCoordinateMonitor,
+            Font = new Font("Segoe UI", 9F)
+        };
+        coordinateView.CheckedChanged += (_, _) =>
+        {
+            _settings.ShowCoordinateMonitor = coordinateView.Checked;
+            UpdateCoordinateMonitor();
+            SaveSettings();
+        };
+        card.Controls.Add(coordinateView);
         return card;
     }
 
@@ -340,7 +356,16 @@ internal sealed class MainForm : Form
     {
         _keyboardHook.HotkeyChanged += OnHotkeyChanged;
         _refreshTimer.Tick += (_, _) => RefreshAutomaticActivation();
+        _coordinateTimer.Tick += (_, _) => UpdateCoordinateMonitor();
+        _coordinateTimer.Start();
         FormClosing += OnFormClosing;
+    }
+
+    private void UpdateCoordinateMonitor()
+    {
+        var enabled = _settings.ShowCoordinateMonitor && !_bindingDialogOpen && !_closing;
+        if (enabled) _coordinateMonitor ??= new CoordinateMonitorOverlay();
+        _coordinateMonitor?.RefreshTarget(_targetWindow, SelectedListBinding, enabled);
     }
 
     private void RefreshAutomaticActivation()
@@ -587,6 +612,8 @@ internal sealed class MainForm : Form
             error = "매크로 단계를 하나 이상 켜세요";
             return false;
         }
+        var firstKeyBinding = MacroBindingResolver.FindFirstKeyBinding(macro, _settings.Bindings);
+        if (firstKeyBinding != null && !ValidateBindingCoordinate(firstKeyBinding, out error)) return false;
         if (macro.KeyboardEnabled &&
             macro.FirstStepKind == MacroFirstStepKind.MouseClick &&
             macro.MouseEnabled &&
@@ -640,6 +667,16 @@ internal sealed class MainForm : Form
             SequenceHoldMs = macro.SequenceHoldMs,
             BeforeClickMs = macro.BeforeClickMs
         };
+        var firstKeyBinding = MacroBindingResolver.FindFirstKeyBinding(macro, _settings.Bindings);
+        if (firstKeyBinding != null)
+        {
+            var firstAction = BuildBindingConfiguration(firstKeyBinding, RepeatMode.Count, 1);
+            // A complete macro key pulse includes its release; ReleaseClick bindings
+            // therefore click once here, instead of waiting for a physical key-up.
+            if (firstKeyBinding.Activation == BindingActivation.ReleaseClick)
+                firstAction = firstAction with { MouseAction = InputActionKind.MouseClick };
+            configuration = configuration with { FirstKeyBinding = firstAction };
+        }
         if (!macro.PauseSkillSequence) return configuration;
         // Keep the point the user aimed at when pressing the trigger.
         if (configuration.CoordinateSpace == CoordinateSpace.CurrentCursor &&
@@ -1150,6 +1187,7 @@ internal sealed class MainForm : Form
         foreach (var macro in _settings.Macros)
         {
             var steps = new List<string>();
+            var firstKeyBinding = MacroBindingResolver.FindFirstKeyBinding(macro, _settings.Bindings);
             if (macro.KeyboardEnabled)
             {
                 steps.Add(macro.FirstStepKind == MacroFirstStepKind.MouseClick
@@ -1159,7 +1197,9 @@ internal sealed class MainForm : Form
                         MouseButtonKind.Middle => "현재 커서 중클릭",
                         _ => "현재 커서 좌클릭"
                     }
-                    : KeyFormatter.Format((Keys)macro.KeyboardKey));
+                    : firstKeyBinding != null
+                        ? $"{KeyFormatter.Format((Keys)macro.KeyboardKey)}({firstKeyBinding.Name})"
+                        : KeyFormatter.Format((Keys)macro.KeyboardKey));
             }
             if (macro.MouseEnabled)
             {
@@ -1403,6 +1443,9 @@ internal sealed class MainForm : Form
         _closing = true;
         SaveSettings();
         _refreshTimer.Stop();
+        _coordinateTimer.Stop();
+        _coordinateTimer.Dispose();
+        _coordinateMonitor?.Dispose();
         _keyboardHook.Dispose();
         _inputDispatcher.Dispose();
         ReleaseAllBindingButtons();

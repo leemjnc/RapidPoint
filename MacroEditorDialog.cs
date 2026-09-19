@@ -21,6 +21,7 @@ internal sealed class MacroEditorDialog : Form
     private CheckBox _mouseEnabledInput = null!;
     private ComboBox _bindingInput = null!;
     private Label _combinationNoteLabel = null!;
+    private CheckBox _firstKeyBindingInput = null!;
     private NumericUpDown _intervalInput = null!;
     private ComboBox _repeatModeInput = null!;
     private NumericUpDown _countInput = null!;
@@ -139,11 +140,16 @@ internal sealed class MacroEditorDialog : Form
         stepsPanel.Controls.Add(_mouseEnabledInput);
         _bindingInput = CreateCombo(194, 92, 322, []);
         stepsPanel.Controls.Add(_bindingInput);
+        _firstKeyBindingInput = CreateCheckBox("1단계 키 바인딩 적용", 20, 130);
+        _firstKeyBindingInput.CheckedChanged += (_, _) => UpdateControls();
+        stepsPanel.Controls.Add(_firstKeyBindingInput);
         _combinationNoteLabel = new Label
         {
             Text = "마우스 1단계에서는 저장된 좌표 동작만 사용할 수 있습니다.",
             ForeColor = Secondary,
-            AutoSize = true,
+            AutoSize = false,
+            AutoEllipsis = true,
+            Size = new Size(322, 20),
             Location = new Point(194, 130),
             Font = new Font("Segoe UI", 8.2F)
         };
@@ -221,6 +227,7 @@ internal sealed class MacroEditorDialog : Form
         _enabledInput.Checked = _working.Enabled;
         _triggerKeyButton.Text = KeyFormatter.Format(_triggerKey);
         _keyboardEnabledInput.Checked = _working.KeyboardEnabled;
+        _firstKeyBindingInput.Checked = _working.UseFirstKeyBinding;
         _firstStepTypeInput.SelectedIndex = _working.FirstStepKind == MacroFirstStepKind.MouseClick ? 1 : 0;
         _keyboardKeyButton.Text = KeyFormatter.Format(_keyboardKey);
         _firstStepMouseButtonInput.SelectedIndex = (int)_working.FirstStepMouseButton;
@@ -289,6 +296,7 @@ internal sealed class MacroEditorDialog : Form
     {
         _triggerKeyButton.Text = KeyFormatter.Format(_triggerKey);
         _keyboardKeyButton.Text = KeyFormatter.Format(_keyboardKey);
+        UpdateControls();
     }
 
     protected override bool ProcessDialogKey(Keys keyData)
@@ -344,7 +352,15 @@ internal sealed class MacroEditorDialog : Form
         _firstStepMouseButtonInput.Enabled = firstStepEnabled && mouseFirst;
         RefreshBindingChoices();
         _bindingInput.Enabled = _mouseEnabledInput.Checked;
-        _combinationNoteLabel.Visible = firstStepEnabled && mouseFirst && _mouseEnabledInput.Checked;
+        _firstKeyBindingInput.Visible = !sequence && !mouseFirst;
+        _firstKeyBindingInput.Enabled = firstStepEnabled;
+        var mappedKey = _bindings.FirstOrDefault(binding => binding.Enabled && (Keys)binding.TriggerKey == _keyboardKey);
+        _combinationNoteLabel.Visible = !sequence && firstStepEnabled;
+        _combinationNoteLabel.Text = mouseFirst
+            ? "현재 위치 클릭 → 저장 좌표 동작 → 원래 위치 복귀"
+            : _firstKeyBindingInput.Checked && mappedKey != null
+                ? $"{KeyFormatter.Format(_keyboardKey)} → {mappedKey.Name} 실행 후 2단계"
+                : "바인딩 대신 키 자체를 대상 프로그램에 전송";
         _countInput.Enabled = SelectedRepeatMode == RepeatMode.Count;
         _repeatModeInput.Enabled = !sequence || cycle;
         _intervalInput.Enabled = !sequence || cycle;
@@ -352,8 +368,19 @@ internal sealed class MacroEditorDialog : Form
         _pauseAfterInput.Enabled = sequence && SelectedSequenceKind == PauseSequenceKind.Skill;
         _pauseAfterInput.Visible = sequence;
         _stableInput.Visible = !sequence;
-        _sequenceHoldInput.Enabled = sequence || _stableInput.Checked;
-        _beforeClickInput.Enabled = (!sequence && _stableInput.Checked) ||
+        var protectedMouseSequence = !sequence && firstStepEnabled && mouseFirst && _mouseEnabledInput.Checked;
+        if (protectedMouseSequence && !_stableInput.Checked)
+        {
+            _applyingValues = true;
+            _stableInput.Checked = true;
+            _applyingValues = false;
+        }
+        _stableInput.AutoCheck = !protectedMouseSequence;
+        _stableInput.Text = protectedMouseSequence ? "클릭 보호 적용" : "안정 입력 (권장)";
+        _sequenceHoldInput.Minimum = protectedMouseSequence ? 20 : 1;
+        _beforeClickInput.Minimum = protectedMouseSequence ? 20 : 0;
+        _sequenceHoldInput.Enabled = sequence || _stableInput.Checked || protectedMouseSequence;
+        _beforeClickInput.Enabled = (!sequence && (_stableInput.Checked || protectedMouseSequence)) ||
             (sequence && SelectedSequenceKind is PauseSequenceKind.Skill or PauseSequenceKind.EscapeThenClick);
         _gapLabel.Text = sequence ? "클릭 전 대기 (ms)" : "1→2단계 대기 (ms)";
         _beforePauseInput.Enabled = sequence && SelectedSequenceKind is PauseSequenceKind.Skill or PauseSequenceKind.ClickThenEscape;
@@ -364,7 +391,8 @@ internal sealed class MacroEditorDialog : Form
             PauseSequenceKind.EscapeWithKey => "ESC + 1단계 키 동시 입력 · 클릭 없이 한 번 실행",
             _ => "ESC + 1단계 키 → 2단계 위치 좌클릭 → 선택적으로 ESC"
         };
-        _sequenceNote.Text = !sequence ? "안정 입력을 끄면 기존 일괄 전송 · 게임의 입력 수신은 별도 확인" : cycle
+        _sequenceNote.Text = protectedMouseSequence ? "매 반복 후 원래 위치 복귀 · 유지/이동 전 간격 최소 20ms"
+            : !sequence ? "안정 입력을 끄면 기존 일괄 전송 · 게임의 입력 수신은 별도 확인" : cycle
             ? "퍼즈 메뉴의 복귀 위치 지정 · 중단 후 게임의 정지 상태를 확인하세요."
             : "게임이 일시정지된 상태에서 실행 · 시간은 환경에 맞춰 조정";
         UpdateSpeedLabel();
@@ -478,6 +506,7 @@ internal sealed class MacroEditorDialog : Form
         _working.Enabled = _enabledInput.Checked;
         _working.TriggerKey = (int)_triggerKey;
         _working.KeyboardEnabled = _keyboardEnabledInput.Checked;
+        _working.UseFirstKeyBinding = _firstKeyBindingInput.Checked;
         _working.FirstStepKind = SelectedFirstStepKind;
         _working.KeyboardKey = (int)_keyboardKey;
         _working.FirstStepMouseButton = (MouseButtonKind)Math.Max(0, _firstStepMouseButtonInput.SelectedIndex);

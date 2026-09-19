@@ -13,6 +13,9 @@ internal static class InputReliabilityTests
     internal static void Run()
     {
         TestStableOrder();
+        MappedMacroTests.Run();
+        MouseAndMonitorTests.Run();
+        MonitorVisualTests.Run();
         TestPauseStress();
         TestPackets();
         TestNoBurstAndStop();
@@ -53,7 +56,7 @@ internal static class InputReliabilityTests
                 if (trace.Count(s => s.EndsWith('+')) != trace.Count(s => s.EndsWith('-')))
                     throw new Exception("Stable mode left a key/button pressed.");
                 string first = mouseFirst ? "mouse" : "key";
-                if (cancel == 0 && !trace.SequenceEqual(new[] { first + "+", "wait:7", first + "-", "wait:11", "move", "mouse+", "wait:7", "mouse-" }))
+                if (cancel == 0 && !trace.SequenceEqual(new[] { first + "+", "wait:" + config.EffectiveHoldMs, first + "-", "wait:" + config.EffectiveGapMs, "move", "mouse+", "wait:" + config.EffectiveHoldMs, "mouse-" }))
                     throw new Exception("Stable sequence order mismatch.");
             }
         }
@@ -236,7 +239,13 @@ internal static class InputReliabilityTests
                     values.Sort();
                     return $"median={values[100]:F3}ms; p95={values[189]:F3}ms; max={values[^1]:F3}ms";
                 }
-                File.WriteAllText(path, "RapidPoint 1.11.0 input validation\nPASS\n" +
+                File.WriteAllText(path, "RapidPoint 1.11.5 input validation\nPASS\n" +
+                    "PASS: one-pixel crosshair, single latest click replaces prior value, click-time coordinates retained on movement/resize\n" +
+                    "PASS: readable HUD coordinates, cursor-centered crosshair, red click pixels, transparent background, bounded click history/expiry\n" +
+                    "PASS: mouse-first cycles return to original cursor, updated aim per cycle, no return on hard cancellation/focus loss\n" +
+                    "PASS: mouse-first fast setting protected, holds/gap before move, cancellation/focus cleanup\n" +
+                    "PASS: HUD/picker shared client coordinates, reference scaling, transparent/no-activate styles\n" +
+                    "PASS: mapped first-key action then second action, fresh cursor aim per cycle, raw-key opt-out\n" +
                     "10,000 simulated standard cycles: 20,000 downs / 20,000 ups\n" +
                     "10,000 simulated pause-skill cycles: 40,000 downs / 40,000 ups\n" +
                     "PASS: pause order, settings, canceled-key/mouse release, focus loss, partial send cleanup\n" +

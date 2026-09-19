@@ -94,6 +94,7 @@ internal sealed class RapidMacroSettings
     public string Name { get; set; } = "연타 매크로 1";
     public int TriggerKey { get; set; } = (int)Keys.X;
     public bool KeyboardEnabled { get; set; } = true;
+    public bool UseFirstKeyBinding { get; set; } = true;
     public bool PauseSkillSequence { get; set; }
     public bool StableInput { get; set; } = true;
     public PauseSequenceKind PauseSequenceKind { get; set; }
@@ -117,6 +118,7 @@ internal sealed class RapidMacroSettings
         Name = Name,
         TriggerKey = TriggerKey,
         KeyboardEnabled = KeyboardEnabled,
+        UseFirstKeyBinding = UseFirstKeyBinding,
         PauseSkillSequence = PauseSkillSequence,
         StableInput = StableInput,
         PauseSequenceKind = PauseSequenceKind,
@@ -154,6 +156,7 @@ internal sealed class AppSettings
     public int RepeatCount { get; set; } = 100;
     public bool SuppressHotkeys { get; set; } = true;
     public bool AlwaysOnTop { get; set; }
+    public bool ShowCoordinateMonitor { get; set; }
     public int ReferenceWidth { get; set; } = 1280;
     public int ReferenceHeight { get; set; } = 720;
     public string TargetProcessName { get; set; } = string.Empty;

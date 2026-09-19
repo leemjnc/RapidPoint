@@ -16,6 +16,22 @@ internal static class Program
         if (validationArgument >= 0 && validationArgument + 1 < args.Length)
             return InputReliabilityTests.WriteReport(args[validationArgument + 1]);
 
+        var monitorPreview = Array.IndexOf(args, "--render-monitor-preview");
+        if (monitorPreview >= 0 && monitorPreview + 1 < args.Length)
+        {
+            using var monitor = new CoordinateMonitorOverlay();
+            monitor.SetDisplay(CoordinateReadout.Describe(new NativeMethods.Point { X = 820, Y = 500 },
+                new NativeMethods.Point { X = 720, Y = 450 }, 1600, 900,
+                new CoordinateBindingSettings { Name = "바인딩 1", CoordinateSpace = CoordinateSpace.TargetWindow }), new Point(720, 450));
+            monitor.AddPreviewClick(new Point(570, 320));
+            _ = monitor.Handle;
+            using var bitmap = new Bitmap(monitor.Width, monitor.Height);
+            monitor.DrawToBitmap(bitmap, monitor.ClientRectangle);
+            bitmap.MakeTransparent(Color.Magenta);
+            bitmap.Save(args[monitorPreview + 1], ImageFormat.Png);
+            return 0;
+        }
+
         if (args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase)))
         {
             return RunSmokeTest();
@@ -48,7 +64,8 @@ internal static class Program
                 Enum.TryParse<PauseSequenceKind>(args[macroPreviewArgument + 2], out var parsed)
                 ? parsed : PauseSequenceKind.Skill;
             return RenderMacroPreview(args[macroPreviewArgument + 1],
-                macroPreviewArgument + 2 < args.Length && args[macroPreviewArgument + 2] == "Standard" ? null : kind);
+                macroPreviewArgument + 2 < args.Length && args[macroPreviewArgument + 2] is "Standard" or "MouseFirst" ? null : kind,
+                macroPreviewArgument + 2 < args.Length && args[macroPreviewArgument + 2] == "MouseFirst");
         }
 
         var windowPreviewArgument = Array.FindIndex(args, arg =>
@@ -130,7 +147,7 @@ internal static class Program
         }
     }
 
-    private static int RenderMacroPreview(string outputPath, PauseSequenceKind? kind)
+    private static int RenderMacroPreview(string outputPath, PauseSequenceKind? kind, bool mouseFirst = false)
     {
         try
         {
@@ -148,7 +165,8 @@ internal static class Program
                     PauseSequenceKind = kind ?? PauseSequenceKind.Skill,
                     PauseAfterClick = true,
                     TriggerKey = (int)Keys.X,
-                    FirstStepKind = MacroFirstStepKind.KeyboardKey,
+                    FirstStepKind = mouseFirst ? MacroFirstStepKind.MouseClick : MacroFirstStepKind.KeyboardKey,
+                    StableInput = !mouseFirst,
                     FirstStepMouseButton = MouseButtonKind.Left,
                     KeyboardKey = (int)Keys.D2,
                     BindingId = previewBinding.Id

@@ -225,10 +225,7 @@ internal sealed class BindingEditorDialog : Form
 
     private bool CaptureTargetRelativePosition(NativeMethods.Point point)
     {
-        if (_targetWindow == IntPtr.Zero || !NativeMethods.IsWindow(_targetWindow) ||
-            !NativeMethods.GetClientRect(_targetWindow, out var rectangle) ||
-            rectangle.Width <= 0 || rectangle.Height <= 0 ||
-            !NativeMethods.ScreenToClient(_targetWindow, ref point))
+        if (!CoordinateReadout.TryClientPoint(_targetWindow, point, out point, out var rectangle))
         {
             return false;
         }

@@ -22,6 +22,12 @@ internal sealed record MacroConfiguration(
 {
     public bool PauseSkillSequence { get; init; }
     public bool StableInput { get; init; }
+    public MacroConfiguration? FirstKeyBinding { get; init; }
+    public bool RequiresMouseTiming => !PauseSkillSequence && FirstStepMouseEnabled && MouseStepEnabled;
+    public bool ReturnsToFirstCursor => RequiresMouseTiming && CoordinateSpace != CoordinateSpace.CurrentCursor;
+    public bool UsesTimedInput => StableInput || RequiresMouseTiming;
+    public int EffectiveHoldMs => Math.Clamp(SequenceHoldMs, RequiresMouseTiming ? 20 : 1, 1000);
+    public int EffectiveGapMs => Math.Clamp(BeforeClickMs, RequiresMouseTiming ? 20 : 0, 1000);
     public PauseSequenceKind PauseSequenceKind { get; init; }
     public bool RepeatingPause => PauseSkillSequence &&
         PauseSequenceKind is PauseSequenceKind.ClickThenEscape or PauseSequenceKind.EscapeThenClick;
@@ -239,7 +245,7 @@ internal sealed class MacroEngine : IDisposable
             Action<int> wait = ms => delay.Delay(ms, token);
             var prepared = configuration.PauseSkillSequence && _nativeSequence
                 ? PauseSkillRunner.Prepare(configuration, token, wait)
-                : !configuration.PauseSkillSequence && configuration.StableInput
+                : !configuration.PauseSkillSequence && (configuration.UsesTimedInput || configuration.FirstKeyBinding != null)
                     ? StableInputRunner.Prepare(configuration, token, wait) : null;
 
             while (!token.IsCancellationRequested && !_stopRequested)

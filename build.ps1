@@ -15,7 +15,7 @@ foreach ($test in @('--smoke-test', '--capture-flow-test')) {
 }
 
 $documents = @('README.md', 'USER_GUIDE.md', 'LICENSE', 'DOTNET-LICENSE.txt',
-    'DOTNET-THIRD-PARTY-NOTICES.txt', 'WINDOWSDESKTOP-LICENSE.txt', 'macro-settings.png', 'pause-settings.png')
+    'DOTNET-THIRD-PARTY-NOTICES.txt', 'WINDOWSDESKTOP-LICENSE.txt', 'macro-settings.png', 'pause-settings.png', 'coordinate-monitor.png', '사용법.txt')
 foreach ($document in $documents) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $document) -Destination $appDir -Force
 }
