@@ -1,0 +1,13 @@
+bin/
+obj/
+dist/
+.vs/
+*.user
+*.suo
+*.pdb
+*.exe
+*.zip
+settings.json
+.env
+.env.*
+*.log

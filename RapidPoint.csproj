@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>RapidPoint</AssemblyName>
+    <RootNamespace>RapidPoint</RootNamespace>
+    <Version>1.11.0</Version>
+    <Company>RapidPoint</Company>
+    <Product>RapidPoint</Product>
+    <Description>대상 창 자동 활성화 좌표 바인딩과 키보드·마우스 복합 연타 매크로</Description>
+  </PropertyGroup>
+</Project>
