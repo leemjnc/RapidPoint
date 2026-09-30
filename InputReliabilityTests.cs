@@ -12,6 +12,8 @@ internal static class InputReliabilityTests
 
     internal static void Run()
     {
+        SettingsPersistenceTests.Run();
+        EditorUsabilityTests.Run();
         TestStableOrder();
         MappedMacroTests.Run();
         MouseAndMonitorTests.Run();
@@ -22,7 +24,7 @@ internal static class InputReliabilityTests
         TestCycleSerialization();
         TestTimer();
         var legacy = JsonSerializer.Deserialize<RapidMacroSettings>("{}", SettingsStore.JsonOptions)!;
-        if (!legacy.StableInput) throw new Exception("Stable input should default on.");
+        if (legacy.StableInput) throw new Exception("Stable input should default off.");
         legacy.StableInput = false;
         if (legacy.Clone().StableInput) throw new Exception("Fast mode choice was not cloned.");
         using var dialog = new MacroEditorDialog(new RapidMacroSettings
@@ -239,7 +241,9 @@ internal static class InputReliabilityTests
                     values.Sort();
                     return $"median={values[100]:F3}ms; p95={values[189]:F3}ms; max={values[^1]:F3}ms";
                 }
-                File.WriteAllText(path, "RapidPoint 1.11.5 input validation\nPASS\n" +
+                File.WriteAllText(path, "RapidPoint 1.12.0 input validation\nPASS\n" +
+                    "PASS: safety off by default, saved choices preserved, mouse/pause protection retained, empty-list controls and key labels\n" +
+                    "PASS: empty bindings remain empty after delete/save/restart; existing bindings and macros preserved\n" +
                     "PASS: one-pixel crosshair, single latest click replaces prior value, click-time coordinates retained on movement/resize\n" +
                     "PASS: readable HUD coordinates, cursor-centered crosshair, red click pixels, transparent background, bounded click history/expiry\n" +
                     "PASS: mouse-first cycles return to original cursor, updated aim per cycle, no return on hard cancellation/focus loss\n" +

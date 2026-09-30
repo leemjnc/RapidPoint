@@ -94,7 +94,8 @@ internal static class Program
     {
         try
         {
-            using var form = new MainForm();
+            // Isolated empty-state preview: never read or write personal settings.
+            using var form = new MainForm(new AppSettings { MultipleMacrosInitialized = true });
             form.ShowInTaskbar = false;
             form.Opacity = 0;
             form.Show();
@@ -160,13 +161,13 @@ internal static class Program
             using var dialog = new MacroEditorDialog(
                 new RapidMacroSettings
                 {
-                    Name = kind == null ? "안정 연타 2" : "퍼즈 스킬 2",
+                    Name = kind == null ? "연타 매크로 2" : "퍼즈 스킬 2",
                     PauseSkillSequence = kind != null,
                     PauseSequenceKind = kind ?? PauseSequenceKind.Skill,
                     PauseAfterClick = true,
                     TriggerKey = (int)Keys.X,
                     FirstStepKind = mouseFirst ? MacroFirstStepKind.MouseClick : MacroFirstStepKind.KeyboardKey,
-                    StableInput = !mouseFirst,
+                    StableInput = false,
                     FirstStepMouseButton = MouseButtonKind.Left,
                     KeyboardKey = (int)Keys.D2,
                     BindingId = previewBinding.Id
@@ -294,7 +295,7 @@ internal static class Program
 
                 if (phase == 0 && dialog.Visible)
                 {
-                    var captureButton = FindControl<Button>(dialog, button => button.Text == "좌표 입력");
+                    var captureButton = FindControl<Button>(dialog, button => button.Name == "CaptureCoordinates");
                     if (captureButton is null)
                     {
                         resultCode = 7;

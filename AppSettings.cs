@@ -96,7 +96,7 @@ internal sealed class RapidMacroSettings
     public bool KeyboardEnabled { get; set; } = true;
     public bool UseFirstKeyBinding { get; set; } = true;
     public bool PauseSkillSequence { get; set; }
-    public bool StableInput { get; set; } = true;
+    public bool StableInput { get; set; }
     public PauseSequenceKind PauseSequenceKind { get; set; }
     public bool PauseAfterClick { get; set; } = true;
     public int SequenceHoldMs { get; set; } = 10;
@@ -165,6 +165,18 @@ internal sealed class AppSettings
     public string MacroBindingId { get; set; } = string.Empty;
     public List<RapidMacroSettings> Macros { get; set; } = [];
     public bool MultipleMacrosInitialized { get; set; }
+
+    internal void NormalizeBindings()
+    {
+        // An empty list is a valid saved choice, not a request for a default binding.
+        Bindings ??= [];
+        foreach (var binding in Bindings.Where(binding =>
+                     binding.Activation == BindingActivation.ReleaseClick ||
+                     binding.CoordinateSpace == CoordinateSpace.CurrentCursor))
+        {
+            binding.MouseAction = InputActionKind.MouseClick;
+        }
+    }
 }
 
 internal static class SettingsStore
@@ -215,6 +227,7 @@ internal static class KeyFormatter
 {
     public static string Format(Keys key) => key switch
     {
+        >= Keys.D0 and <= Keys.D9 => ((int)key - (int)Keys.D0).ToString(),
         Keys.Space => "SPACE",
         Keys.Return => "ENTER",
         Keys.Back => "BACKSPACE",

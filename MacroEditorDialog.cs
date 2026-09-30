@@ -35,7 +35,10 @@ internal sealed class MacroEditorDialog : Form
     private Label _sequenceNote = null!;
     private CheckBox _pauseAfterInput = null!;
     private CheckBox _stableInput = null!;
+    private Label _clickProtection = null!;
     private Label _gapLabel = null!;
+    private Label _holdLabel = null!;
+    private Label _pauseDelayLabel = null!;
     private NumericUpDown _sequenceHoldInput = null!;
     private NumericUpDown _beforeClickInput = null!;
     private NumericUpDown _beforePauseInput = null!;
@@ -63,7 +66,7 @@ internal sealed class MacroEditorDialog : Form
         BackColor = Background;
         ForeColor = Primary;
         Font = new Font("Segoe UI", 9.5F);
-        ClientSize = new Size(590, 720);
+        ClientSize = new Size(590, 785);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -85,7 +88,7 @@ internal sealed class MacroEditorDialog : Form
         });
         Controls.Add(new Label
         {
-            Text = "1단계 키보드·마우스 입력과 2단계 좌표 동작을 조합해 반복합니다.",
+            Text = "실행 키를 정하고, 아래 순서대로 반복할 동작을 선택하세요.",
             ForeColor = Secondary,
             AutoSize = true,
             Location = new Point(26, 55)
@@ -94,7 +97,7 @@ internal sealed class MacroEditorDialog : Form
         AddLabel("이름", 26, 91);
         _nameInput = CreateTextInput(26, 113, 252);
         Controls.Add(_nameInput);
-        AddLabel("실행 키", 296, 91);
+        AddLabel("실행 키 · 눌러서 변경", 296, 91);
         _triggerKeyButton = CreateButton("키 선택", 296, 112, 160, 35);
         _triggerKeyButton.Click += (_, _) => BeginKeyCapture(KeyCaptureTarget.Trigger);
         Controls.Add(_triggerKeyButton);
@@ -109,16 +112,22 @@ internal sealed class MacroEditorDialog : Form
         };
         Controls.Add(_enabledInput);
 
+        AddLabel("실행 모드", 26, 165);
+        _sequenceModeInput = CreateCombo(126, 160, 440,
+            ["일반 연타", "퍼즈 스킬 · ESC+키 → 클릭", "퍼즈 반복 · 클릭 → ESC", "퍼즈 반복 · ESC → 클릭", "ESC+지정 키 · 동시 입력만"]);
+        _sequenceModeInput.SelectedIndexChanged += (_, _) => UpdateControls();
+        Controls.Add(_sequenceModeInput);
+
         var stepsPanel = new Panel
         {
             BackColor = Surface,
-            Location = new Point(24, 168),
-            Size = new Size(542, 160)
+            Location = new Point(24, 208),
+            Size = new Size(542, 188)
         };
         Controls.Add(stepsPanel);
         stepsPanel.Controls.Add(new Label
         {
-            Text = "반복할 동작",
+            Text = "실행 순서 · 1단계 → 2단계",
             ForeColor = Primary,
             Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
             AutoSize = true,
@@ -140,7 +149,7 @@ internal sealed class MacroEditorDialog : Form
         stepsPanel.Controls.Add(_mouseEnabledInput);
         _bindingInput = CreateCombo(194, 92, 322, []);
         stepsPanel.Controls.Add(_bindingInput);
-        _firstKeyBindingInput = CreateCheckBox("1단계 키 바인딩 적용", 20, 130);
+        _firstKeyBindingInput = CreateCheckBox("1단계 키에 연결된 바인딩 실행", 20, 130);
         _firstKeyBindingInput.CheckedChanged += (_, _) => UpdateControls();
         stepsPanel.Controls.Add(_firstKeyBindingInput);
         _combinationNoteLabel = new Label
@@ -149,8 +158,8 @@ internal sealed class MacroEditorDialog : Form
             ForeColor = Secondary,
             AutoSize = false,
             AutoEllipsis = true,
-            Size = new Size(322, 20),
-            Location = new Point(194, 130),
+            Size = new Size(500, 22),
+            Location = new Point(20, 159),
             Font = new Font("Segoe UI", 8.2F)
         };
         stepsPanel.Controls.Add(_combinationNoteLabel);
@@ -158,17 +167,17 @@ internal sealed class MacroEditorDialog : Form
         var repeatPanel = new Panel
         {
             BackColor = Surface,
-            Location = new Point(24, 343),
+            Location = new Point(24, 410),
             Size = new Size(542, 126)
         };
         Controls.Add(repeatPanel);
-        repeatPanel.Controls.Add(CreateLabel("입력 간격", 18, 16));
+        repeatPanel.Controls.Add(CreateLabel("반복 사이 대기", 18, 16));
         _intervalInput = CreateNumber(18, 39, 105, 1, 60000);
         _intervalInput.ValueChanged += (_, _) => UpdateSpeedLabel();
         repeatPanel.Controls.Add(_intervalInput);
         repeatPanel.Controls.Add(CreateLabel("ms", 128, 47));
         repeatPanel.Controls.Add(CreateLabel("반복 방식", 165, 16));
-        _repeatModeInput = CreateCombo(165, 39, 205, ["누르는 동안 무제한", "토글로 무제한", "지정 횟수 실행"]);
+        _repeatModeInput = CreateCombo(165, 39, 205, ["누르고 있는 동안", "한 번 눌러 시작 / 다시 중지", "정해진 횟수만"]);
         _repeatModeInput.SelectedIndexChanged += (_, _) => UpdateControls();
         repeatPanel.Controls.Add(_repeatModeInput);
         repeatPanel.Controls.Add(CreateLabel("반복 횟수", 388, 16));
@@ -185,24 +194,28 @@ internal sealed class MacroEditorDialog : Form
 
         var sequencePanel = new Panel
         {
-            BackColor = Surface, Location = new Point(24, 483), Size = new Size(542, 163)
+            BackColor = Surface, Location = new Point(24, 550), Size = new Size(542, 163)
         };
         Controls.Add(sequencePanel);
-        _sequenceModeInput = CreateCombo(18, 9, 300,
-            ["일반 연타 (퍼즈 기능 끔)", "퍼즈 스킬 · ESC+키 → 클릭", "퍼즈 반복 · 클릭 → ESC", "퍼즈 반복 · ESC → 클릭", "ESC+지정 키 · 동시 입력만"]);
-        _sequenceModeInput.SelectedIndexChanged += (_, _) => UpdateControls();
-        sequencePanel.Controls.Add(_sequenceModeInput);
+        var timingTitle = CreateLabel("입력 시간 설정", 18, 12);
+        timingTitle.ForeColor = Primary;
+        sequencePanel.Controls.Add(timingTitle);
         _pauseAfterInput = CreateCheckBox("클릭 후 ESC 재정지", 330, 12);
         sequencePanel.Controls.Add(_pauseAfterInput);
-        _stableInput = CreateCheckBox("안정 입력 (권장)", 330, 12);
+        _stableInput = CreateCheckBox("안전 모드 · 안정 입력", 330, 12);
         _stableInput.CheckedChanged += (_, _) => UpdateControls();
         sequencePanel.Controls.Add(_stableInput);
+        _clickProtection = CreateLabel("클릭 보호 · 자동 적용", 330, 12);
+        _clickProtection.ForeColor = Accent;
+        sequencePanel.Controls.Add(_clickProtection);
         _sequenceDescription = CreateLabel("", 18, 42);
         sequencePanel.Controls.Add(_sequenceDescription);
-        sequencePanel.Controls.Add(CreateLabel("누름 유지 (ms)", 18, 69));
+        _holdLabel = CreateLabel("누름 유지 (ms)", 18, 69);
+        sequencePanel.Controls.Add(_holdLabel);
         _gapLabel = CreateLabel("클릭 전 대기 (ms)", 190, 69);
         sequencePanel.Controls.Add(_gapLabel);
-        sequencePanel.Controls.Add(CreateLabel("재정지 전 대기 (ms)", 362, 69));
+        _pauseDelayLabel = CreateLabel("재정지 전 대기 (ms)", 362, 69);
+        sequencePanel.Controls.Add(_pauseDelayLabel);
         _sequenceHoldInput = CreateNumber(18, 90, 145, 1, 1000);
         _beforeClickInput = CreateNumber(190, 90, 145, 0, 1000);
         _beforePauseInput = CreateNumber(362, 90, 154, 0, 1000);
@@ -210,10 +223,10 @@ internal sealed class MacroEditorDialog : Form
         _sequenceNote = CreateLabel("", 18, 133);
         sequencePanel.Controls.Add(_sequenceNote);
 
-        var cancelButton = CreateButton("취소", 350, 667, 102, 40);
+        var cancelButton = CreateButton("취소", 350, 731, 102, 40);
         cancelButton.Click += (_, _) => DialogResult = DialogResult.Cancel;
         Controls.Add(cancelButton);
-        var saveButton = CreateButton("저장", 464, 667, 102, 40, true);
+        var saveButton = CreateButton("설정 저장", 464, 731, 102, 40, true);
         saveButton.Click += (_, _) => SaveAndClose();
         Controls.Add(saveButton);
         AcceptButton = saveButton;
@@ -369,14 +382,11 @@ internal sealed class MacroEditorDialog : Form
         _pauseAfterInput.Visible = sequence;
         _stableInput.Visible = !sequence;
         var protectedMouseSequence = !sequence && firstStepEnabled && mouseFirst && _mouseEnabledInput.Checked;
-        if (protectedMouseSequence && !_stableInput.Checked)
-        {
-            _applyingValues = true;
-            _stableInput.Checked = true;
-            _applyingValues = false;
-        }
-        _stableInput.AutoCheck = !protectedMouseSequence;
-        _stableInput.Text = protectedMouseSequence ? "클릭 보호 적용" : "안정 입력 (권장)";
+        _stableInput.Visible = !sequence && !protectedMouseSequence;
+        _clickProtection.Visible = protectedMouseSequence;
+        // Mouse-click protection is enforced by the engine independently. Do not
+        // overwrite the user's standard-mode preference when switching step types.
+        _stableInput.Enabled = !protectedMouseSequence;
         _sequenceHoldInput.Minimum = protectedMouseSequence ? 20 : 1;
         _beforeClickInput.Minimum = protectedMouseSequence ? 20 : 0;
         _sequenceHoldInput.Enabled = sequence || _stableInput.Checked || protectedMouseSequence;
@@ -384,7 +394,15 @@ internal sealed class MacroEditorDialog : Form
             (sequence && SelectedSequenceKind is PauseSequenceKind.Skill or PauseSequenceKind.EscapeThenClick);
         _gapLabel.Text = sequence ? "클릭 전 대기 (ms)" : "1→2단계 대기 (ms)";
         _beforePauseInput.Enabled = sequence && SelectedSequenceKind is PauseSequenceKind.Skill or PauseSequenceKind.ClickThenEscape;
-        _sequenceDescription.Text = !sequence ? "안정 입력: 누름 → 유지 → 해제 후 다음 단계 (시간 조절 가능)" : SelectedSequenceKind switch
+        _beforePauseInput.Visible = _pauseDelayLabel.Visible = sequence &&
+            SelectedSequenceKind is PauseSequenceKind.Skill or PauseSequenceKind.ClickThenEscape;
+        _holdLabel.ForeColor = _sequenceHoldInput.Enabled ? Secondary : Color.DimGray;
+        _gapLabel.ForeColor = _beforeClickInput.Enabled ? Secondary : Color.DimGray;
+        _sequenceDescription.Text = !sequence
+            ? protectedMouseSequence ? "클릭 보호 자동 적용 · 클릭을 해제한 뒤 다음 위치로 이동합니다."
+                : _stableInput.Checked ? "안전 모드 켜짐 · 누름 → 유지 → 해제 후 다음 단계 실행"
+                : "안전 모드 꺼짐 · 추가 누름 유지 없이 순서대로 전송합니다."
+            : SelectedSequenceKind switch
         {
             PauseSequenceKind.ClickThenEscape => "2단계 위치 좌클릭 → 대기 → ESC · 한 묶음씩 반복",
             PauseSequenceKind.EscapeThenClick => "ESC → 대기 → 2단계 위치 좌클릭 · 한 묶음씩 반복",
@@ -392,7 +410,7 @@ internal sealed class MacroEditorDialog : Form
             _ => "ESC + 1단계 키 → 2단계 위치 좌클릭 → 선택적으로 ESC"
         };
         _sequenceNote.Text = protectedMouseSequence ? "매 반복 후 원래 위치 복귀 · 유지/이동 전 간격 최소 20ms"
-            : !sequence ? "안정 입력을 끄면 기존 일괄 전송 · 게임의 입력 수신은 별도 확인" : cycle
+            : !sequence ? "입력이 누락되면 안전 모드를 켜고 시간을 늘려 확인하세요." : cycle
             ? "퍼즈 메뉴의 복귀 위치 지정 · 중단 후 게임의 정지 상태를 확인하세요."
             : "게임이 일시정지된 상태에서 실행 · 시간은 환경에 맞춰 조정";
         UpdateSpeedLabel();
@@ -437,7 +455,7 @@ internal sealed class MacroEditorDialog : Form
         {
             return;
         }
-        _speedLabel.Text = "입력 간격 = 한 묶음 완료 후 다음 묶음까지의 대기 (ms)";
+        _speedLabel.Text = $"1·2단계 완료 → {_intervalInput.Value:N0}ms 대기 → 다음 반복";
         if (SequenceEnabled)
             _speedLabel.Text = RepeatingPause
                 ? "입력 간격 = 한 묶음 완료 후 다음 묶음까지의 대기 (ms)"

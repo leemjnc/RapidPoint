@@ -60,7 +60,7 @@ internal static class MouseAndMonitorTests
             BindingId = binding.Id, SequenceHoldMs = 10, BeforeClickMs = 0
         }, [binding], []);
         typeof(MacroEditorDialog).GetMethod("SaveAndClose", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(editor, null);
-        if (editor.Result is not { StableInput: true, SequenceHoldMs: 20, BeforeClickMs: 20 })
+        if (editor.Result is not { StableInput: false, SequenceHoldMs: 20, BeforeClickMs: 20 })
             throw new Exception("Editor timing does not match actual mouse protection.");
 
         using var target = new Form { StartPosition = FormStartPosition.Manual, Location = new Point(200, 100), ClientSize = new Size(1280, 720) };

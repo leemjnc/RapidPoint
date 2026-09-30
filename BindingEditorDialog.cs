@@ -26,6 +26,7 @@ internal sealed class BindingEditorDialog : Form
     private CheckBox _enabledInput = null!;
     private Button _captureButton = null!;
     private Label _coordinateTitleLabel = null!;
+    private Label _coordinateHelp = null!;
     private bool _capturingKey;
     private Keys _triggerKey;
 
@@ -51,7 +52,7 @@ internal sealed class BindingEditorDialog : Form
         BackColor = Background;
         ForeColor = Primary;
         Font = new Font("Segoe UI", 9.5F);
-        ClientSize = new Size(560, 510);
+        ClientSize = new Size(560, 550);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -65,7 +66,7 @@ internal sealed class BindingEditorDialog : Form
     {
         Controls.Add(new Label
         {
-            Text = "새로운 키 바인딩",
+            Text = "키 바인딩 설정",
             Font = new Font("Segoe UI Semibold", 17F, FontStyle.Bold),
             ForeColor = Primary,
             AutoSize = true,
@@ -82,7 +83,7 @@ internal sealed class BindingEditorDialog : Form
         AddLabel("이름", 26, 91);
         _nameInput = CreateTextInput(26, 113, 244);
         Controls.Add(_nameInput);
-        AddLabel("할당 키", 292, 91);
+        AddLabel("할당 키 · 눌러서 변경", 292, 91);
         _keyButton = CreateButton("키 선택", 292, 112, 240, 35);
         _keyButton.Click += (_, _) =>
         {
@@ -136,7 +137,8 @@ internal sealed class BindingEditorDialog : Form
         coordinatePanel.Controls.Add(CreateLabel("Y", 177, 92));
         _yInput = CreateNumber(200, 85, 118, -100000, 100000);
         coordinatePanel.Controls.Add(_yInput);
-        _captureButton = CreateButton("좌표 입력", 327, 83, 161, 37);
+        _captureButton = CreateButton("게임에서 좌표 찍기", 327, 83, 161, 37);
+        _captureButton.Name = "CaptureCoordinates";
         _captureButton.Click += (_, _) => CapturePositionFromTargetWindow();
         coordinatePanel.Controls.Add(_captureButton);
 
@@ -158,10 +160,16 @@ internal sealed class BindingEditorDialog : Form
         };
         coordinatePanel.Controls.Add(_enabledInput);
 
-        var cancelButton = CreateButton("취소", 318, 448, 102, 40);
+        _coordinateHelp = new Label
+        {
+            Location = new Point(26, 439), Size = new Size(506, 38),
+            ForeColor = Secondary, Font = new Font("Segoe UI", 9F)
+        };
+        Controls.Add(_coordinateHelp);
+        var cancelButton = CreateButton("취소", 318, 492, 102, 40);
         cancelButton.Click += (_, _) => DialogResult = DialogResult.Cancel;
         Controls.Add(cancelButton);
-        var saveButton = CreateButton("저장", 430, 448, 102, 40, true);
+        var saveButton = CreateButton("설정 저장", 430, 492, 102, 40, true);
         saveButton.Click += (_, _) => SaveAndClose();
         Controls.Add(saveButton);
         AcceptButton = saveButton;
@@ -313,6 +321,11 @@ internal sealed class BindingEditorDialog : Form
         _captureButton.Enabled = !currentCursorMode;
         _referenceWidthInput.Enabled = windowMode;
         _referenceHeightInput.Enabled = windowMode;
+        _coordinateHelp.Text = currentCursorMode
+            ? "마우스를 움직이지 않고, 현재 포인터 위치에서 클릭합니다."
+            : windowMode
+                ? "‘게임에서 좌표 찍기’ → 원하는 위치 클릭 → 설정 저장\n창을 이동하거나 크기를 바꿔도 기준 해상도에 맞춰 보정합니다."
+                : "모니터 전체를 기준으로 한 좌표입니다. 창 이동·크기는 보정하지 않습니다.\n게임 창을 움직이며 사용한다면 ‘대상 창 내부’를 선택하세요.";
     }
 
     private void UpdateActivationMode()

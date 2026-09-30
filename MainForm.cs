@@ -15,6 +15,7 @@ internal sealed class MainForm : Form
     private static readonly Color Danger = Color.FromArgb(251, 113, 133);
 
     private readonly AppSettings _settings;
+    private readonly bool _persistSettings;
     private readonly Dictionary<string, MacroEngine> _macroEngines = [];
     private MacroEngine? _pauseSkillEngine;
     private readonly Dictionary<string, MouseButtonKind> _heldBindingButtons = [];
@@ -30,20 +31,21 @@ internal sealed class MainForm : Form
     private ListView _macroList = null!;
     private Label _targetWindowLabel = null!;
     private Label _statusBadge = null!;
-    private Button _startButton = null!;
+    private Label _startButton = null!;
 
     private IntPtr _targetWindow;
     private volatile bool _bindingDialogOpen;
     private volatile bool _profileActive;
     private volatile bool _closing;
 
-    public MainForm()
+    public MainForm(AppSettings? previewSettings = null)
     {
         _ = DedicatedPauseWorker.Shared;
         _inputDispatcher = new LowLatencyInputDispatcher(
             ProcessHotkeyChanged,
             exception => SetStatus(exception.Message, StatusKind.Error));
-        _settings = SettingsStore.Load();
+        _persistSettings = previewSettings is null;
+        _settings = previewSettings ?? SettingsStore.Load();
         NormalizeSettings();
         ConfigureWindow();
         BuildInterface();
@@ -62,28 +64,10 @@ internal sealed class MainForm : Form
 
     private void NormalizeSettings()
     {
-        _settings.Bindings ??= [];
+        _settings.NormalizeBindings();
         _settings.Macros ??= [];
         _settings.SuppressHotkeys = true;
         _settings.AlwaysOnTop = false;
-        if (_settings.Bindings.Count == 0)
-        {
-            _settings.Bindings.Add(new CoordinateBindingSettings
-            {
-                X = _settings.X,
-                Y = _settings.Y,
-                CoordinateSpace = _settings.CoordinateSpace,
-                ReferenceWidth = _settings.ReferenceWidth,
-                ReferenceHeight = _settings.ReferenceHeight,
-                TriggerKey = _settings.CoordinateMappingKey > 0 ? _settings.CoordinateMappingKey : (int)Keys.D1
-            });
-        }
-        foreach (var binding in _settings.Bindings.Where(binding =>
-                     binding.Activation == BindingActivation.ReleaseClick ||
-                     binding.CoordinateSpace == CoordinateSpace.CurrentCursor))
-        {
-            binding.MouseAction = InputActionKind.MouseClick;
-        }
         if (!_settings.MultipleMacrosInitialized)
         {
             _settings.Macros.Add(new RapidMacroSettings
@@ -163,7 +147,7 @@ internal sealed class MainForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "여러 좌표 키 바인딩 · 복합 연타 매크로 · 창 비례 좌표",
+            Text = "대상 창 선택 → 키와 동작 설정 → 게임에서 실행",
             ForeColor = TextSecondary,
             Font = new Font("Segoe UI", 9.5F),
             AutoSize = true,
@@ -217,7 +201,7 @@ internal sealed class MainForm : Form
     private Control BuildBindingsCard()
     {
         var card = CreateCard(new Padding(0, 0, 0, 8));
-        AddCardTitle(card, "키 바인딩", "새 바인딩을 추가하고 키마다 서로 다른 좌표 동작을 지정합니다.");
+        AddCardTitle(card, "키 바인딩", "키 하나로 원하는 위치를 클릭합니다. 목록을 두 번 누르면 편집합니다.");
 
         _targetWindowLabel = new Label
         {
@@ -266,9 +250,11 @@ internal sealed class MainForm : Form
         var deleteButton = CreateSecondaryButton("삭제", new Point(374, 252), new Size(159, 38));
         deleteButton.Click += (_, _) => DeleteSelectedBinding();
         card.Controls.Add(deleteButton);
+        ConfigureListGuidance(card, _bindingList, editButton, deleteButton,
+            "아직 바인딩이 없습니다.\n아래 ‘＋ 새 바인딩’으로 키와 좌표를 추가하세요.");
         var coordinateView = new CheckBox
         {
-            Text = "게임 위 좌표 보기 · 선택한 바인딩 기준도 표시",
+            Text = "게임 화면에 좌표 표시 · 마우스 위치와 최근 클릭",
             Location = new Point(22, 303), AutoSize = true,
             ForeColor = TextSecondary, Checked = _settings.ShowCoordinateMonitor,
             Font = new Font("Segoe UI", 9F)
@@ -286,7 +272,7 @@ internal sealed class MainForm : Form
     private Control BuildMacroCard()
     {
         var card = CreateCard(new Padding(0, 8, 0, 0));
-        AddCardTitle(card, "연타 매크로", "여러 실행 키에 서로 다른 복합 연타 동작을 지정합니다.");
+        AddCardTitle(card, "연타 매크로", "키보드 입력과 좌표 동작을 순서대로 반복합니다. 두 번 눌러 편집하세요.");
 
         _macroList = new ListView
         {
@@ -319,7 +305,30 @@ internal sealed class MainForm : Form
         var deleteButton = CreateSecondaryButton("삭제", new Point(374, 217), new Size(159, 38));
         deleteButton.Click += (_, _) => DeleteSelectedMacro();
         card.Controls.Add(deleteButton);
+        ConfigureListGuidance(card, _macroList, editButton, deleteButton,
+            "아직 매크로가 없습니다.\n아래 ‘＋ 새 매크로’에서 반복할 동작을 선택하세요.");
         return card;
+    }
+
+    private static void ConfigureListGuidance(Panel card, ListView list, Button edit, Button delete, string emptyText)
+    {
+        var hint = new Label
+        {
+            Text = emptyText, ForeColor = TextSecondary, BackColor = list.BackColor,
+            TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 9F),
+            Bounds = new Rectangle(2, 29, list.Width - 4, list.Height - 31)
+        };
+        list.Controls.Add(hint);
+        hint.BringToFront();
+        void UpdateSelection()
+        {
+            edit.Enabled = delete.Enabled = list.SelectedItems.Count > 0;
+            hint.Visible = list.Items.Count == 0;
+        }
+        list.SelectedIndexChanged += (_, _) => UpdateSelection();
+        // Refresh methods end with Invalidate, including transitions to an empty list.
+        list.Invalidated += (_, _) => UpdateSelection();
+        UpdateSelection();
     }
 
     private Control BuildFooter()
@@ -334,10 +343,14 @@ internal sealed class MainForm : Form
             Margin = Padding.Empty
         };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        _startButton = CreatePrimaryButton("◎   대상 창이 활성화되면 자동 준비");
+        _startButton = new Label
+        {
+            Text = "대상 창을 선택하면 자동으로 준비됩니다.",
+            ForeColor = TextPrimary, BackColor = CardBackground,
+            TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F)
+        };
         _startButton.Dock = DockStyle.Fill;
         _startButton.Margin = Padding.Empty;
-        _startButton.Enabled = false;
         footer.Controls.Add(_startButton, 0, 0);
         return footer;
     }
@@ -1173,6 +1186,7 @@ internal sealed class MainForm : Form
             if (binding.Id == selectId) item.Selected = true;
         }
         _bindingList.EndUpdate();
+        _bindingList.Invalidate();
         if (_bindingList.SelectedItems.Count == 0 && _bindingList.Items.Count > 0)
         {
             _bindingList.Items[0].Selected = true;
@@ -1234,6 +1248,7 @@ internal sealed class MainForm : Form
             if (macro.Id == selectId) item.Selected = true;
         }
         _macroList.EndUpdate();
+        _macroList.Invalidate();
         if (_macroList.SelectedItems.Count == 0 && _macroList.Items.Count > 0)
         {
             _macroList.Items[0].Selected = true;
@@ -1433,6 +1448,7 @@ internal sealed class MainForm : Form
 
     private void SaveSettings()
     {
+        if (!_persistSettings) return;
         _settings.SuppressHotkeys = true;
         _settings.AlwaysOnTop = false;
         SettingsStore.Save(_settings);
@@ -1553,6 +1569,15 @@ internal sealed class MainForm : Form
             Font = new Font("Segoe UI Semibold", 8.5F)
         };
         button.FlatAppearance.BorderColor = CardBorder;
+        button.Paint += (_, args) =>
+        {
+            if (button.Enabled) return;
+            var bounds = Rectangle.Inflate(button.ClientRectangle, -2, -2);
+            using var background = new SolidBrush(button.BackColor);
+            args.Graphics.FillRectangle(background, bounds);
+            TextRenderer.DrawText(args.Graphics, button.Text, button.Font, bounds,
+                Color.FromArgb(110, 126, 150), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        };
         return button;
     }
 
